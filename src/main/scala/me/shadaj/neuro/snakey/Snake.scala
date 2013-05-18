@@ -2,15 +2,18 @@ package me.shadaj.neuro.snakey
 
 import scala.collection.mutable
 
-sealed abstract class Direction(left: Direction, right: Direction) {
-  def turnLeft: Direction = left
-  def turnRight: Direction = right
-  def opposite: Direction = right.turnRight
+sealed abstract class Direction(left: => Direction, right: => Direction) {
+  lazy val turnLeft = left
+  lazy val turnRight = right
+  def opposite: Direction = turnRight.turnRight
+  
 }
-object Up extends Direction(Left, Right)
+
 object Down extends Direction(Right, Left)
-object Left extends Direction(Down, Up)
 object Right extends Direction(Up, Down)
+object Left extends Direction(Down, Up)
+object Up extends Direction(Left, Right)
+
 
 case class Part(x: Int, y: Int, direction: Direction) {
   def moveInDirection(d: Direction) = {
@@ -19,6 +22,7 @@ case class Part(x: Int, y: Int, direction: Direction) {
       case Down => Part(x,y+1, d)
       case Left => Part(x-1,y,d)
       case Right => Part(x+1,y, d)
+      case _ => Part(x,y,d)
     }
   }
 }
@@ -39,4 +43,11 @@ class Snake(val parts: Seq[Part]) {
   }
   
   def direction = parts.head.direction
+}
+
+object TestApp extends App {
+  println(s"${Down.turnRight}")
+  println(s"${Up.turnRight}")
+  println(s"${Left.turnRight}")
+  println(s"${Right.turnRight}")
 }
