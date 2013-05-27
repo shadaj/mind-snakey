@@ -1,38 +1,32 @@
 package me.shadaj.neuro.snakey
 
 import java.awt.Color
-import java.awt.event.ActionEvent
-import java.awt.event.ActionListener
-import scala.swing.BoxPanel
-import scala.swing.Button
-import scala.swing.Dimension
-import scala.swing.Graphics2D
-import scala.swing.GridPanel
-import scala.swing.Label
-import scala.swing.MainFrame
-import scala.swing.Orientation
-import scala.swing.Panel
-import scala.swing.SimpleSwingApplication
-import scala.swing.event.Key
-import scala.swing.event.KeyPressed
-import scala.util.Success
-import scala.util.Try
+import java.awt.event._
+
 import javax.swing.Timer
-import me.shadaj.neuro.thinkgear.Blink
-import me.shadaj.neuro.thinkgear.NeuroIterator
-import me.shadaj.neuro.thinkgear.PoorSignalLevel
-import scala.util.Failure
-import scala.swing.event.ButtonClicked
-import scala.swing.ComboBox
+
 import javax.imageio.ImageIO
 import java.io.File
+import java.awt.image.BufferedImage
+
+import scala.swing._
+import scala.swing.event._
+
+import scala.util.Success
+import scala.util.Failure
+import scala.util.Try
+
 import scala.annotation.tailrec
+
+import me.shadaj.neuro.thinkgear._
 
 object SnakeyLauncher extends Snakey
 
 class Snakey extends SimpleSwingApplication {
   var game = new SnakeyScreen(this, 0, true)
   val panel = new SnakeyPanel(this)
+
+  var mindControl = true
 
   val frameContents = new BoxPanel(Orientation.Vertical) {
     contents += game
@@ -60,7 +54,7 @@ class Snakey extends SimpleSwingApplication {
 
   def setInfo(text: String) {
     try panel.setInfo(text) catch {
-      case e =>
+      case e: Throwable =>
     }
   }
 
@@ -86,33 +80,56 @@ class Snakey extends SimpleSwingApplication {
       panel.startButton.enabled = false
       panel.levelChooser.enabled = false
     } else {
+      game.end
+      panel.fruits.text = "Fruits eaten: 0"
       reset
     }
-
   }
 
   def reset {
     fruitsEaten = 0
     frameContents.contents.clear
-    game = new SnakeyScreen(this, panel.levelChooser.selection.item, true)
+    game = new SnakeyScreen(this, panel.levelChooser.selection.item, mindControl)
     frameContents.contents += game
     frameContents.contents += panel
     panel.startButton.enabled = true
     panel.revalidate
-    start
+  }
+
+  def disableChoosers {
+    try {
+      panel.startButton.enabled = false
+      panel.levelChooser.enabled = false
+    } catch {
+      case _ =>
+    }
+  }
+
+  def enableChoosers {
+    try {
+      panel.startButton.enabled = true
+      panel.levelChooser.enabled = true
+    } catch {
+      case _ =>
+    }
   }
 }
 
 class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) extends Panel {
   var running = false
   var dead = false
-  var waitingForBlinkConfirmation = false
+  def waitingForBlinkConfirmation = lastBlink != 0
+  var waitingForStop = false
 
   def start {
     running = true
   }
 
-  val FRAME_RATE = 100
+  def end {
+    waitingForStop = true
+  }
+
+  val FRAME_RATE = 150
   val GRID_SIZE = 50
 
   //Neuro Settings
@@ -175,10 +192,19 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
   val connectedImage = ImageIO.read(new File("connected.png"))
   val nosignalImage = ImageIO.read(new File("nosignal.png"))
-  val connecting = List(ImageIO.read(new File("connecting1.png")), ImageIO.read(new File("connecting2.png")), ImageIO.read(new File("connecting3.png")))
+  val connectingImages = List(ImageIO.read(new File("connecting1.png")), ImageIO.read(new File("connecting2.png")), ImageIO.read(new File("connecting3.png")))
+
+  object ConnectingImageIterator extends Iterator[BufferedImage] {
+    var currentImage = 2
+
+    def hasNext = true
+    def next = {
+      currentImage = if (currentImage == 2) 0 else currentImage + 1
+      connectingImages(currentImage)
+    }
+  }
 
   var imageToShow = nosignalImage
-  var currentConnecting = 0
 
   override def paint(g: Graphics2D) {
     g.clearRect(0, 0, screenWidth, screenHeight)
@@ -188,17 +214,15 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
     if (mindControl) {
       g.drawImage(imageToShow, boxWidth * (GRID_SIZE - 3), boxHeight, boxWidth * 2, boxHeight * 2, null)
     }
-    //    g.drawImage(workingImage, 0, 0, null)
   }
 
   class FrameRateUpdate extends ActionListener {
-    def actionPerformed(event: ActionEvent) {
+    def actionPerformed(event: java.awt.event.ActionEvent) {
       if (!dead && running) {
         if (mindControl && timeSinceBlink > MAX_DOUBLEBLINK && lastBlink != 0) {
-          val newDirection = snake.direction.turnRight
+          val newDirection = snake.direction.right
           snake = snake.turn(newDirection)
           lastBlink = 0
-          waitingForBlinkConfirmation = false
         }
 
         val eatingSelf = snake.parts.tail.exists {
@@ -208,7 +232,9 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
         val coordinates = (snake.parts.head.x, snake.parts.head.y)
 
-        if (eatingSelf || badBlocks.contains(coordinates)) {
+        if (badBlocks.contains(coordinates)) {
+          snake = (new Snake(snake.parts.reverse.map(p => new Part(p.x, p.y, p.direction.opposite)))).move
+        } else if (eatingSelf) {
           host.die
           dead = true
         } else {
@@ -223,7 +249,7 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
           }
         }
       }
-      
+
       repaint()
     }
   }
@@ -232,12 +258,16 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
   def timeSinceBlink = System.currentTimeMillis - lastBlink
 
-  @tailrec
+  val timer = new Timer(FRAME_RATE, new FrameRateUpdate)
+
+  timer.start()
+
   private def connect: Try[NeuroIterator] = {
     val iterator = Try(new NeuroIterator)
     iterator match {
       case Success(v) => {
         host.setInfo("Succesfully connected!")
+        host.enableChoosers
         Success(v)
       }
 
@@ -249,89 +279,74 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
     }
   }
 
-
-  class NeuroReader extends Thread {
-    override def run {
-      val in = connect.get
-      in.foreach { d =>
-        if (!dead && running) {
-          d match {
-            case Blink(power: Int) => {
-              if (power >= MIN_BLINK) {
-                if (timeSinceBlink <= MAX_DOUBLEBLINK) {
-                  snake = snake.turn(snake.direction.turnLeft)
-                  lastBlink = 0
-                  waitingForBlinkConfirmation = false
-                } else {
-                  lastBlink = System.currentTimeMillis
-                  waitingForBlinkConfirmation = true
-                }
-              }
-            }
-            case PoorSignalLevel(level: Int) => {
-              println(level)
-              host.badSignal
-              imageToShow = connecting(currentConnecting)
-              currentConnecting = if (currentConnecting == 2) 0 else currentConnecting + 1
-            }
-            case _ => imageToShow = connectedImage
-          }
-        } else {
-          d match {
-            case PoorSignalLevel(level: Int) => {
-              host.badSignal
-              imageToShow = connecting(currentConnecting)
-              currentConnecting = if (currentConnecting == 2) 0 else currentConnecting + 1
-            }
-            case _ => imageToShow = connectedImage
-          }
-        }
-      }
-    }
-  }
-
-  val timer = new Timer(FRAME_RATE, new FrameRateUpdate)
-
-  timer.start()
+  lazy val in = connect.get
 
   if (mindControl) {
-    val reader = new NeuroReader
-    reader.start()
-  }
-}
+    object NeuroReader extends Thread {
+      def read {
+        while (!waitingForStop) {
+          val d = in.next
+          if (!dead && running) {
+            d match {
+              case Blink(power: Int) => {
+                if (power >= MIN_BLINK) {
+                  if (timeSinceBlink <= MAX_DOUBLEBLINK) {
+                    snake = snake.turn(snake.direction.left)
+                    lastBlink = 0
+                  } else {
+                    lastBlink = System.currentTimeMillis
+                  }
+                }
+              }
 
-class SnakeyPanel(host: Snakey) extends GridPanel(1, 3) {
-  val mainInfo = new Label("You're doing great!")
-  contents += mainInfo
+              case PoorSignalLevel(level: Int) => {
+                host.badSignal
+                imageToShow = ConnectingImageIterator.next
+              }
 
-  def setInfo(text: String) { mainInfo.text = text }
+              case EEG(_, _, PoorSignalLevel(level)) => {
+                if (level > 0) {
+                  imageToShow = ConnectingImageIterator.next
+                } else {
+                  imageToShow = connectedImage
+                }
+              }
 
-  def die {
-    mainInfo.text = "You died :( I told you not to eat yourself!"
-    startButton.enabled = true
-    levelChooser.enabled = true
-  }
+              case _ =>
+            }
+          } else {
+            d match {
+              case PoorSignalLevel(level: Int) => {
+                host.badSignal
+                host.panel.startButton.enabled = false
+                imageToShow = ConnectingImageIterator.next
+              }
 
-  def badSignal {
-    mainInfo.text = "Looks like your headset isn't on!"
-  }
+              case EEG(_, _, PoorSignalLevel(level)) => {
+                if (level > 0) {
+                  if (!running) {
+                    host.panel.startButton.enabled = false
+                  }
+                  imageToShow = ConnectingImageIterator.next
+                } else {
+                  host.panel.startButton.enabled = true
+                  imageToShow = connectedImage
+                }
+              }
 
-  border = new javax.swing.border.EtchedBorder
+              case _ =>
+            }
+          }
+        }
 
-  val fruits = new Label("Fruits eaten: None")
-  contents += fruits
+        in.neuroSocket.close()
+      }
 
-  val startButton = new Button("Start")
-  contents += startButton
+      override def run {
+        read
+      }
+    }
 
-  val levelChooser = new ComboBox((0 to 20))
-  contents += levelChooser
-  levelChooser.focusable = false
-
-  listenTo(startButton)
-
-  startButton.reactions += {
-    case ButtonClicked(b) =>
-      host.start
+    NeuroReader.start
   }
 }
