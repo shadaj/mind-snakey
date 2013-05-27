@@ -288,14 +288,12 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
           val d = in.next
           if (!dead && running) {
             d match {
-              case Blink(power: Int) => {
-                if (power >= MIN_BLINK) {
-                  if (timeSinceBlink <= MAX_DOUBLEBLINK) {
-                    snake = snake.turn(snake.direction.left)
-                    lastBlink = 0
-                  } else {
-                    lastBlink = System.currentTimeMillis
-                  }
+              case Blink(power: Int) if power >= MIN_BLINK => {
+                if (timeSinceBlink <= MAX_DOUBLEBLINK) {
+                  snake = snake.turn(snake.direction.left)
+                  lastBlink = 0
+                } else {
+                  lastBlink = System.currentTimeMillis
                 }
               }
 
