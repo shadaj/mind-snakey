@@ -1,128 +1,31 @@
 package me.shadaj.neuro.snakey
 
-import java.awt.Color
-import java.awt.event._
-
-import javax.swing.Timer
-
-import javax.imageio.ImageIO
-import java.io.File
+import me.shadaj.neuro.thinkgear.Blink
 import java.awt.image.BufferedImage
-
-import scala.swing._
-import scala.swing.event._
-
-import scala.util.Success
+import javax.imageio.ImageIO
+import java.awt.Graphics2D
+import me.shadaj.neuro.thinkgear.EEG
+import me.shadaj.neuro.thinkgear.PoorSignalLevel
+import java.awt.event.ActionListener
+import scala.swing.Panel
 import scala.util.Failure
+import javax.swing.Timer
 import scala.util.Try
+import scala.util.Success
+import scala.swing.event.Key
+import me.shadaj.neuro.thinkgear.NeuroIterator
+import java.awt.Color
+import java.io.File
 
-import scala.annotation.tailrec
-
-import me.shadaj.neuro.thinkgear._
-
-object SnakeyLauncher extends Snakey
-
-class Snakey extends SimpleSwingApplication {
-  var game = new SnakeyScreen(this, 0, true)
-  val panel = new SnakeyPanel(this)
-
-  var mindControl = true
-
-  val frameContents = new BoxPanel(Orientation.Vertical) {
-    contents += game
-    contents += panel
-
-    listenTo(this.keys)
-    reactions += {
-      case KeyPressed(_, k, _, _) =>
-        game.processKey(k)
-    }
-
-    focusable = true
-  }
-
-  def top = new MainFrame {
-    title = "Snakey"
-    contents = frameContents
-
-    size = new Dimension(1000, 1000)
-
-    panel.maximumSize = new Dimension(1000, 50)
-  }
-
-  var fruitsEaten = 0
-
-  def setInfo(text: String) {
-    try panel.setInfo(text) catch {
-      case e: Throwable =>
-    }
-  }
-
-  def die {
-    panel.die
-  }
-
-  def badSignal {
-    if (!game.dead) {
-      panel.badSignal
-    }
-  }
-
-  def eatFruit {
-    fruitsEaten += 1
-    panel.fruits.text = "Fruits eaten: " + fruitsEaten
-  }
-
-  def start {
-    if (!game.dead) {
-      game.LEVEL = panel.levelChooser.selection.item
-      game.start
-      panel.startButton.enabled = false
-      panel.levelChooser.enabled = false
-    } else {
-      game.end
-      panel.fruits.text = "Fruits eaten: 0"
-      reset
-    }
-  }
-
-  def reset {
-    fruitsEaten = 0
-    frameContents.contents.clear
-    game = new SnakeyScreen(this, panel.levelChooser.selection.item, mindControl)
-    frameContents.contents += game
-    frameContents.contents += panel
-    panel.startButton.enabled = true
-    panel.revalidate
-  }
-
-  def disableChoosers {
-    try {
-      panel.startButton.enabled = false
-      panel.levelChooser.enabled = false
-    } catch {
-      case _ =>
-    }
-  }
-
-  def enableChoosers {
-    try {
-      panel.startButton.enabled = true
-      panel.levelChooser.enabled = true
-    } catch {
-      case _ =>
-    }
-  }
-}
-
-class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) extends Panel {
-  var running = false
+class SnakeyScreen(host: SnakeyApp, val level: Int, mindControl: Boolean = true) extends Panel {
+  var started = false
   var dead = false
   def waitingForBlinkConfirmation = lastBlink != 0
   var waitingForStop = false
+  var paused = false
 
   def start {
-    running = true
+    started = true
   }
 
   def end {
@@ -135,8 +38,6 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
   //Neuro Settings
   val MIN_BLINK = 10
   val MAX_DOUBLEBLINK = 750 //In milliseconds
-
-  val listener = new SnakeyKeyListener(this)
 
   def screenSize = size
 
@@ -152,7 +53,7 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
   val badBlocks = (0 until GRID_SIZE).flatMap(x => (0 until GRID_SIZE).map(y => (x, y))).filter {
     case (x, y) =>
-      (math.random * 10 <= LEVEL / 20D ||
+      (math.random * 10 <= level / 20D ||
         (x == 0 || x == GRID_SIZE - 1 || y == 0 || y == GRID_SIZE - 1)) && ((math.abs(middleOfGrid - x) >= SPACE_FROM_CENTER || math.abs(middleOfGrid - y) >= SPACE_FROM_CENTER))
   }
 
@@ -170,9 +71,9 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
   }
 
   def drawSnake(g: Graphics2D) {
+    g.setPaint(Color.green)
     snake.parts.foreach {
       case Part(x, y, _) =>
-        g.setPaint(Color.green)
         g.fillRect(x * boxWidth, y * boxHeight, boxWidth, boxHeight)
     }
   }
@@ -199,7 +100,7 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
     def hasNext = true
     def next = {
-      currentImage = if (currentImage == 2) 0 else currentImage + 1
+      currentImage = (currentImage + 1) % connectingImages.size
       connectingImages(currentImage)
     }
   }
@@ -216,15 +117,10 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
     }
   }
 
-  class FrameRateUpdate extends ActionListener {
+  object FrameRateUpdate extends ActionListener {
     def actionPerformed(event: java.awt.event.ActionEvent) {
-      if (!dead && running) {
-        if (mindControl && timeSinceBlink > MAX_DOUBLEBLINK && lastBlink != 0) {
-          val newDirection = snake.direction.right
-          snake = snake.turn(newDirection)
-          lastBlink = 0
-        }
-
+      if (!dead && started && !paused) {
+        println("paused: " + paused)
         val eatingSelf = snake.parts.tail.exists {
           case Part(x, y, _) =>
             snake.parts.head.x == x && snake.parts.head.y == y
@@ -258,7 +154,7 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
   def timeSinceBlink = System.currentTimeMillis - lastBlink
 
-  val timer = new Timer(FRAME_RATE, new FrameRateUpdate)
+  val timer = new Timer(FRAME_RATE, FrameRateUpdate)
 
   timer.start()
 
@@ -281,12 +177,19 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
 
   lazy val in = connect.get
 
+  def processPoorSignal() {
+    host.badSignal
+    host.panel.startButton.enabled = false
+    imageToShow = ConnectingImageIterator.next
+    paused = true
+  }
+
   if (mindControl) {
     object NeuroReader extends Thread {
       def read {
         while (!waitingForStop) {
           val d = in.next
-          if (!dead && running) {
+          if (!dead && started && !paused) {
             d match {
               case Blink(power: Int) if power >= MIN_BLINK => {
                 if (timeSinceBlink <= MAX_DOUBLEBLINK) {
@@ -297,17 +200,22 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
                 }
               }
 
-              case PoorSignalLevel(level: Int) => {
-                host.badSignal
-                imageToShow = ConnectingImageIterator.next
-              }
-
               case EEG(_, _, PoorSignalLevel(level)) => {
                 if (level > 0) {
-                  imageToShow = ConnectingImageIterator.next
+                  processPoorSignal()
                 } else {
                   imageToShow = connectedImage
                 }
+
+                if (timeSinceBlink > MAX_DOUBLEBLINK && lastBlink != 0) {
+                  val newDirection = snake.direction.right
+                  snake = snake.turn(newDirection)
+                  lastBlink = 0
+                }
+              }
+
+              case PoorSignalLevel(level: Int) => {
+                processPoorSignal()
               }
 
               case _ =>
@@ -315,20 +223,16 @@ class SnakeyScreen(host: Snakey, var LEVEL: Int, mindControl: Boolean = true) ex
           } else {
             d match {
               case PoorSignalLevel(level: Int) => {
-                host.badSignal
-                host.panel.startButton.enabled = false
-                imageToShow = ConnectingImageIterator.next
+                processPoorSignal()
               }
 
               case EEG(_, _, PoorSignalLevel(level)) => {
                 if (level > 0) {
-                  if (!running) {
-                    host.panel.startButton.enabled = false
-                  }
-                  imageToShow = ConnectingImageIterator.next
+                  processPoorSignal()
                 } else {
                   host.panel.startButton.enabled = true
                   imageToShow = connectedImage
+                  paused = false
                 }
               }
 
