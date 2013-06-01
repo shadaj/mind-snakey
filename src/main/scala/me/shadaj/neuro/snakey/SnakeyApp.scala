@@ -1,41 +1,37 @@
 package me.shadaj.neuro.snakey
 
-import java.awt.Color
-import java.awt.event._
+import scala.swing.BoxPanel
+import scala.swing.Dimension
+import scala.swing.MainFrame
+import scala.swing.Orientation
+import scala.swing.SimpleSwingApplication
+import scala.swing.event.KeyPressed
 
-import javax.swing.Timer
+import akka.actor.ActorSystem
+import akka.actor.Props
+import akka.actor.actorRef2Scala
 
-import javax.imageio.ImageIO
-import java.io.File
-import java.awt.image.BufferedImage
+object SnakeyApp extends SimpleSwingApplication {
+  private var mindControl = true
 
-import scala.swing._
-import scala.swing.event._
+  val system = ActorSystem("SnakeySystem")
 
-import scala.util.Success
-import scala.util.Failure
-import scala.util.Try
+  private val snakeyActor = system.actorOf(Props(new SnakeyActor(0)), "snakeyActor")
 
-import scala.annotation.tailrec
+  var screen = new SnakeyScreen(0, mindControl)
 
-import me.shadaj.neuro.thinkgear._
+  val panel = new SnakeyPanel()
 
-object SnakeyLauncher extends SnakeyApp
-
-class SnakeyApp extends SimpleSwingApplication {
-  var game = new SnakeyScreen(SnakeyApp.this, 0, true)
-  val panel = new SnakeyPanel(SnakeyApp.this)
-
-  var mindControl = true
+  var dead = false
 
   val frameContents = new BoxPanel(Orientation.Vertical) {
-    contents += game
+    contents += screen
     contents += panel
 
     listenTo(this.keys)
     reactions += {
       case KeyPressed(_, k, _, _) =>
-        game.processKey(k)
+        screen.processKey(k)
     }
 
     focusable = true
@@ -53,19 +49,14 @@ class SnakeyApp extends SimpleSwingApplication {
   var fruitsEaten = 0
 
   def setInfo(text: String) {
-    try panel.setInfo(text) catch {
-      case e: Throwable =>
+    if (panel != null) {
+      panel.setInfo(text)
     }
   }
 
   def die {
     panel.die
-  }
-
-  def badSignal {
-    if (!game.dead) {
-      panel.badSignal
-    }
+    dead = true
   }
 
   def eatFruit {
@@ -74,30 +65,41 @@ class SnakeyApp extends SimpleSwingApplication {
   }
 
   def start {
-    if (!game.dead) {
-      game.start
-      panel.startButton.enabled = false
-      panel.levelChooser.enabled = false
-    } else {
-      game.end
-      panel.fruits.text = "Fruits eaten: 0"
+    if (dead) {
       reset
+    } else {
+      disableChoosers
+      snakeyActor ! StartGame
     }
   }
 
   def reset {
+    if (mindControl) {
+      screen.neuroThingy.waitingForStop = true
+    }
+    snakeyActor ! Reset
+    panel.fruits.text = "Fruits eaten: 0"
     fruitsEaten = 0
     frameContents.contents.clear
-    game = new SnakeyScreen(SnakeyApp.this, panel.levelChooser.selection.item, mindControl)
-    frameContents.contents += game
+    screen.timer.stop()
+    screen = new SnakeyScreen(panel.levelChooser.selection.item, mindControl)
+    frameContents.contents += screen
     frameContents.contents += panel
     panel.startButton.enabled = true
     panel.revalidate
+    panel.startButton.text = "Start"
+    dead = false
   }
 
   def enableChoosers {
     if (panel != null) {
       panel.enable
+    }
+  }
+
+  def disableChoosers {
+    if (panel != null) {
+      panel.disable
     }
   }
 }

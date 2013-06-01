@@ -6,7 +6,9 @@ import scala.swing.Button
 import scala.swing.Label
 import scala.swing.event.ButtonClicked
 
-class SnakeyPanel(host: SnakeyApp) extends GridPanel(1, 3) {
+class SnakeyPanel extends GridPanel(1, 3) {
+  val host = SnakeyApp
+
   val mainInfo = new Label("You're doing great!")
   contents += mainInfo
 
@@ -16,16 +18,17 @@ class SnakeyPanel(host: SnakeyApp) extends GridPanel(1, 3) {
     startButton.enabled = false
     levelChooser.enabled = false
   }
-  
+
   def enable {
     startButton.enabled = true
     levelChooser.enabled = true
   }
-  
+
   def die {
-    mainInfo.text = "You died :( I told you not to eat yourself!"
+    mainInfo.text = "You died :("
     startButton.enabled = true
     levelChooser.enabled = true
+    startButton.text = "Reset"
   }
 
   def badSignal {
@@ -37,12 +40,15 @@ class SnakeyPanel(host: SnakeyApp) extends GridPanel(1, 3) {
   val fruits = new Label("Fruits eaten: None")
   contents += fruits
 
+  this.focusable = false
+
   val startButton = new Button("Start")
+  startButton.focusable = false
   contents += startButton
 
   val levelChooser = new ComboBox((0 to 20))
-  contents += levelChooser
   levelChooser.focusable = false
+  contents += levelChooser
 
   listenTo(startButton)
 
