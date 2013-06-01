@@ -64,7 +64,6 @@ class SnakeyActor(level: Int) extends Actor {
         g.fillRect(x * screen.boxWidth, y * screen.boxHeight, screen.boxWidth, screen.boxHeight)
     }
   }
-  
   def receive = {
     case Tick if gameRunning => {
       snakeActor ! CheckEating(fruit, self)
