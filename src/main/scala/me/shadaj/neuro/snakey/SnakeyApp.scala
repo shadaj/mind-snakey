@@ -16,9 +16,9 @@ object SnakeyApp extends SimpleSwingApplication {
 
   val system = ActorSystem("SnakeySystem")
 
-  private val snakeyActor = system.actorOf(Props(new SnakeyActor(0)), "snakeyActor")
+  private val snakeyActor = system.actorOf(Props(new SnakeyActor(panel.levelChooser.selection.item)), "snakeyActor")
 
-  var screen = new SnakeyScreen(0, mindControl)
+  var screen = new SnakeyScreen(mindControl)
 
   val panel = new SnakeyPanel()
 
@@ -82,7 +82,7 @@ object SnakeyApp extends SimpleSwingApplication {
     fruitsEaten = 0
     frameContents.contents.clear
     screen.timer.stop()
-    screen = new SnakeyScreen(panel.levelChooser.selection.item, mindControl)
+    screen = new SnakeyScreen(mindControl)
     frameContents.contents += screen
     frameContents.contents += panel
     panel.startButton.enabled = true

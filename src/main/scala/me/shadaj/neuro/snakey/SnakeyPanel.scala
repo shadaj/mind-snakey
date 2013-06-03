@@ -25,7 +25,7 @@ class SnakeyPanel extends GridPanel(1, 3) {
   }
 
   def die {
-    mainInfo.text = "You died :("
+    mainInfo.text = "You died ;("
     startButton.enabled = true
     levelChooser.enabled = true
     startButton.text = "Reset"

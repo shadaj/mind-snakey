@@ -18,20 +18,17 @@ import java.awt.Color
 import java.io.File
 import akka.actor.Props
 import akka.actor._
+import java.awt.event.ActionEvent
 
 case class DoneDrawing(screenActor: ActorRef)
 
-class SnakeyScreen(val level: Int, mindControl: Boolean = true) extends Panel {
+class SnakeyScreen(mindControl: Boolean = true) extends Panel {
   val host = SnakeyApp
 
   val snakeyActor = host.system.actorFor("/user/snakeyActor")
 
   val FRAME_RATE = 150
   val GRID_SIZE = 50
-
-  //Neuro Settings
-  val MIN_BLINK = 10
-  val MAX_DOUBLEBLINK = 750 //In milliseconds
 
   def screenSize = size
 
@@ -80,7 +77,7 @@ class SnakeyScreen(val level: Int, mindControl: Boolean = true) extends Panel {
   val screenActor = host.system.actorOf(Props(ScreenActor))
   
   object FrameRateUpdate extends ActionListener {
-    def actionPerformed(event: java.awt.event.ActionEvent) {
+    def actionPerformed(event: ActionEvent) {
       snakeyActor ! Tick
       screenActor ! Draw
     }
@@ -97,10 +94,10 @@ class SnakeyScreen(val level: Int, mindControl: Boolean = true) extends Panel {
     snakeyActor ! PauseGame
   }
 
-  var neuroThingy: NeuroThingy = null
+  var neuroThingy: NeuroSender = null
 
   if (mindControl) {
-    neuroThingy = new NeuroThingy
+    neuroThingy = new NeuroSender
     neuroThingy.start
   }
 

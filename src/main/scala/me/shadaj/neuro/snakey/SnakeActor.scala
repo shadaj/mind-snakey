@@ -20,40 +20,41 @@ case class Draw(g: Graphics2D, screenActor: ActorRef)
 
 case class CheckEating(f: Fruit, snakeyActor: ActorRef)
 
-case object Eating
-case object NotEating
-
 case class CheckBadBlocks(b: Seq[(Int, Int)], snakeyActor: ActorRef)
 
 case object Reset
 
 class SnakeActor extends Actor {
-  var snake = new Snake(Seq(new Part(SnakeyApp.screen.middleOfGrid, SnakeyApp.screen.middleOfGrid, Up)), SnakeyApp.screen.boxWidth, SnakeyApp.screen.boxHeight)
-
   val host = SnakeyApp
   def screen = SnakeyApp.screen
 
-  val snakeyActor = context.actorFor("/user/snakeyActor")
+  var snake = newSnake
   
+  def newSnake = {
+    new Snake(Seq(new Part(screen.middleOfGrid, screen.middleOfGrid, Up)), screen.boxWidth, screen.boxHeight)
+  }
+  
+  val snakeyActor = context.actorFor("/user/snakeyActor")
+
   def receive = {
     case d: Direction => snake = snake.turn(d)
 
+    case CheckEating(f: Fruit, snakeyActor: ActorRef) => {
+      if (snake.eating(f)) {
+        self ! EatFruit
+      }
+    }
+
     case EatFruit => {
-      snakeyActor ! EatFruit
       snake = snake.grow
-      host.eatFruit
+      snakeyActor ! FruitEaten
     }
 
     case Move => snake = snake.move
 
-    case Draw(g, sa) => {
-      SwingUtilities.invokeAndWait(new Runnable {
-        def run {
-          snake.draw(g)
-        }
-      })
-      
-      sa ! DoneDrawing(self)
+    case Draw(g, snakeyActor) => {
+      snake.draw(g)
+      snakeyActor ! DoneDrawing(self)
     }
 
     case BadSignal => {
@@ -68,7 +69,6 @@ class SnakeActor extends Actor {
       } else {
         host.reset
       }
-
     }
 
     case Tick => {
@@ -79,14 +79,6 @@ class SnakeActor extends Actor {
       }
     }
 
-    case CheckEating(f: Fruit, snakeyActor: ActorRef) => {
-      if (snake.eating(f)) {
-        snake = snake.grow
-        host.eatFruit
-        snakeyActor ! Eating
-      }
-    }
-
     case TurnRight => {
       snake = snake.turn(snake.direction.right)
     }
@@ -94,14 +86,14 @@ class SnakeActor extends Actor {
     case TurnLeft => {
       snake = snake.turn(snake.direction.left)
     }
-    
+
     case CheckBadBlocks(b: Seq[(Int, Int)], snakeyActor: ActorRef) => {
       val headCoordinates = (snake.parts.head.x, snake.parts.head.y)
       if (b.contains(headCoordinates)) {
         snake = snake.reverse.move
-      } 
+      }
     }
-    
-    case Reset => snake =  new Snake(Seq(new Part(SnakeyApp.screen.middleOfGrid, SnakeyApp.screen.middleOfGrid, Up)), SnakeyApp.screen.boxWidth, SnakeyApp.screen.boxHeight)
+
+    case Reset => snake = newSnake
   }
 }
