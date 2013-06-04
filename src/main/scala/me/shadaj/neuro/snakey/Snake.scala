@@ -3,6 +3,7 @@ package me.shadaj.neuro.snakey
 import scala.collection.mutable
 import java.awt.Graphics2D
 import java.awt.Color
+import java.awt.geom.Rectangle2D
 
 sealed abstract class Direction(leftDirection: => Direction, rightDirection: => Direction) {
   lazy val left = leftDirection
@@ -28,12 +29,12 @@ case class Part(x: Int, y: Int, direction: Direction) {
   }
 }
 
-class Snake(val parts: Seq[Part], boxWidth: => Int, boxHeight: => Int) extends Sprite {
+class Snake(val parts: Seq[Part], boxWidth: => Float, boxHeight: => Float) extends Sprite {
   def draw(g: Graphics2D) {
     g.setPaint(Color.green)
     parts.foreach {
       case Part(x, y, _) =>
-        g.fillRect(x * boxWidth, y * boxHeight, boxWidth, boxHeight)
+        g.fill(new Rectangle2D.Float(x * boxWidth, y * boxHeight, boxWidth, boxHeight))
     }
   }
 
@@ -65,11 +66,4 @@ class Snake(val parts: Seq[Part], boxWidth: => Int, boxHeight: => Int) extends S
   var dead = false
   
   def die {dead = true}
-}
-
-object TestApp extends App {
-  println(s"${Down.right}")
-  println(s"${Up.right}")
-  println(s"${Left.right}")
-  println(s"${Right.right}")
 }

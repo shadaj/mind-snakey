@@ -12,7 +12,7 @@ import akka.actor.Props
 import akka.actor.actorRef2Scala
 
 object SnakeyApp extends SimpleSwingApplication {
-  private var mindControl = true
+  private var mindControl = false
 
   val system = ActorSystem("SnakeySystem")
 

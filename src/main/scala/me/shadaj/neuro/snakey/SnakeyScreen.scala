@@ -22,7 +22,7 @@ import java.awt.event.ActionEvent
 
 case class DoneDrawing(screenActor: ActorRef)
 
-class SnakeyScreen(mindControl: Boolean = true) extends Panel {
+class SnakeyScreen(var mindControl: Boolean = true) extends Panel {
   val host = SnakeyApp
 
   val snakeyActor = host.system.actorFor("/user/snakeyActor")
@@ -30,13 +30,11 @@ class SnakeyScreen(mindControl: Boolean = true) extends Panel {
   val FRAME_RATE = 150
   val GRID_SIZE = 50
 
-  def screenSize = size
-
   def screenWidth = size.width
   def screenHeight = size.height
 
-  def boxWidth = screenWidth / GRID_SIZE
-  def boxHeight = screenHeight / GRID_SIZE
+  def boxWidth = screenWidth.toFloat / GRID_SIZE
+  def boxHeight = screenHeight.toFloat / GRID_SIZE
 
   val middleOfGrid = GRID_SIZE / 2
 
@@ -70,12 +68,12 @@ class SnakeyScreen(mindControl: Boolean = true) extends Panel {
 
   var imageToDraw: BufferedImage = null
 
-  override def paint(g: Graphics2D) {
+  override def paintComponent(g: Graphics2D) {
     g.drawImage(imageToDraw, null, 0, 0)
   }
 
   val screenActor = host.system.actorOf(Props(ScreenActor))
-  
+
   object FrameRateUpdate extends ActionListener {
     def actionPerformed(event: ActionEvent) {
       snakeyActor ! Tick
@@ -88,17 +86,31 @@ class SnakeyScreen(mindControl: Boolean = true) extends Panel {
   timer.start()
 
   def processPoorSignal() {
-    snakeyActor ! BadSignal
-    host.panel.startButton.enabled = false
-    imageToShow = ConnectingImageIterator.next
-    snakeyActor ! PauseGame
+    if (mindControl) {
+      snakeyActor ! BadSignal
+      host.panel.startButton.enabled = false
+      imageToShow = ConnectingImageIterator.next
+      snakeyActor ! PauseGame
+    }
   }
 
   var neuroThingy: NeuroSender = null
 
   if (mindControl) {
+    turnOnMindControl
+  }
+
+  def turnOnMindControl {
+    mindControl = true
     neuroThingy = new NeuroSender
     neuroThingy.start
+  }
+
+  def turnOffMindControl {
+    mindControl = false
+    if (neuroThingy != null) {
+      neuroThingy.waitingForStop = true
+    }
   }
 
   object ScreenActor extends Actor {
@@ -108,7 +120,7 @@ class SnakeyScreen(mindControl: Boolean = true) extends Panel {
         val graphics = imageToDraw.getGraphics().asInstanceOf[Graphics2D]
         snakeyActor ! Draw(graphics, self)
         if (mindControl) {
-          graphics.drawImage(imageToShow, boxWidth * (GRID_SIZE - 3), boxHeight, boxWidth * 2, boxHeight * 2, null)
+          graphics.drawImage(imageToShow, (boxWidth * (GRID_SIZE - 3)).toInt, boxHeight.toInt, (boxWidth * 2).toInt, (boxHeight * 2).toInt, null)
         }
       }
 

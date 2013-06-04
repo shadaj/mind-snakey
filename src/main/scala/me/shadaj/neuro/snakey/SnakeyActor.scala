@@ -13,6 +13,7 @@ import akka.actor.ActorSystem
 import akka.actor.Props
 import java.awt.Graphics2D
 import java.awt.Color
+import java.awt.geom.Rectangle2D
 
 case object Tick
 
@@ -53,16 +54,18 @@ class SnakeyActor(level: => Int) extends Actor {
           (x == 0 || x == GRID_SIZE - 1 || y == 0 || y == GRID_SIZE - 1)) && ((math.abs(middleOfGrid - x) >= SPACE_FROM_CENTER || math.abs(middleOfGrid - y) >= SPACE_FROM_CENTER))
     }
   }
+
+  def newFruit = Fruit(GRID_SIZE, GRID_SIZE, badBlocks, screen.boxWidth, screen.boxHeight)
   
   var badBlocks = newBadBlocks
 
-  var fruit = Fruit(GRID_SIZE, GRID_SIZE, badBlocks, screen.boxWidth, screen.boxHeight)
+  var fruit = newFruit
 
   def drawBadBlocks(g: Graphics2D) {
     g.setPaint(Color.white)
     badBlocks.foreach {
       case (x, y) =>
-        g.fillRect(x * screen.boxWidth, y * screen.boxHeight, screen.boxWidth, screen.boxHeight)
+        g.fill(new Rectangle2D.Float(x * screen.boxWidth, y * screen.boxHeight, screen.boxWidth, screen.boxHeight))
     }
   }
 
@@ -100,7 +103,7 @@ class SnakeyActor(level: => Int) extends Actor {
     }
     case FruitEaten => {
       host.eatFruit
-      fruit = Fruit(GRID_SIZE, GRID_SIZE, badBlocks, screen.boxWidth, screen.boxHeight)
+      fruit = newFruit
     }
 
     case StopGame => {
@@ -190,5 +193,6 @@ class NeuroSender extends Thread {
       snakeyActor ! in.next
     }
     in.neuroSocket.close()
+    waitingForStop = false
   }
 }
