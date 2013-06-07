@@ -115,7 +115,7 @@ class SnakeyScreen(var mindControl: Boolean = true) extends Panel {
 
   object ScreenActor extends Actor {
     def receive = {
-      case Draw => {
+      case Draw if screenWidth > 0 && screenHeight > 0 => {
         imageToDraw = new BufferedImage(screenWidth, screenHeight, BufferedImage.TYPE_INT_RGB)
         val graphics = imageToDraw.getGraphics().asInstanceOf[Graphics2D]
         snakeyActor ! Draw(graphics, self)
